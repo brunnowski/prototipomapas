@@ -1,17 +1,33 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Prototipo Rota</title>
+  <title>Protótipo de Rastreamento</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 100vh; }
+    body { margin: 0; font-family: sans-serif; }
+    #map { height: 90vh; }
+    #controls {
+      padding: 10px;
+      background: #f4f4f4;
+      border-bottom: 1px solid #ddd;
+    }
+    button, input {
+      margin: 5px;
+      padding: 8px 12px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
+  <div id="controls">
+    <input type="file" id="fileInput" accept=".gpx" />
+    <button id="liveTrackingBtn">Iniciar Rastreamento em Tempo Real</button>
+    <button id="stopTrackingBtn" disabled>Parar Rastreamento</button>
+  </div>
   <div id="map"></div>
 
   <!-- Leaflet JS -->
@@ -23,22 +39,78 @@
     // Inicializa o mapa
     var map = L.map('map').setView([0,0], 2);
 
-    // Camada base (OpenStreetMap grátis)
+    // Camada base (grátis do OpenStreetMap)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
+      attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // Carregar arquivo GPX (troque pelo seu arquivo!)
-    new L.GPX("rota.gpx", {
-        async: true,
-        marker_options: {
-          startIconUrl: "https://leafletjs.com/examples/custom-icons/leaf-green.png",
-          endIconUrl: "https://leafletjs.com/examples/custom-icons/leaf-red.png",
-          shadowUrl: "https://leafletjs.com/examples/custom-icons/leaf-shadow.png"
-        }
-    }).on('loaded', function(e) {
-        map.fitBounds(e.target.getBounds());
-    }).addTo(map);
+    // ======================
+    // 1) Carregar arquivo GPX
+    // ======================
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        var gpxData = evt.target.result;
+
+        var gpxLayer = new L.GPX(gpxData, {
+          async: true,
+          marker_options: {
+            startIconUrl: "https://leafletjs.com/examples/custom-icons/leaf-green.png",
+            endIconUrl: "https://leafletjs.com/examples/custom-icons/leaf-red.png",
+            shadowUrl: "https://leafletjs.com/examples/custom-icons/leaf-shadow.png"
+          }
+        }).on('loaded', function(e) {
+          map.fitBounds(e.target.getBounds());
+        }).addTo(map);
+      };
+      reader.readAsText(file);
+    });
+
+    // =========================
+    // 2) Rastreamento em tempo real
+    // =========================
+    var watchId = null;
+    var livePath = L.polyline([], {color: 'blue'}).addTo(map);
+    var liveMarker = null;
+
+    document.getElementById('liveTrackingBtn').addEventListener('click', function() {
+      if (navigator.geolocation) {
+        watchId = navigator.geolocation.watchPosition(function(pos) {
+          var lat = pos.coords.latitude;
+          var lon = pos.coords.longitude;
+          var latlng = [lat, lon];
+
+          livePath.addLatLng(latlng);
+
+          if (!liveMarker) {
+            liveMarker = L.marker(latlng).addTo(map).bindPopup("Você está aqui").openPopup();
+            map.setView(latlng, 16);
+          } else {
+            liveMarker.setLatLng(latlng);
+          }
+        }, function(err) {
+          alert("Erro ao acessar GPS: " + err.message);
+        }, { enableHighAccuracy: true });
+      } else {
+        alert("Seu navegador não suporta geolocalização.");
+      }
+
+      document.getElementById('liveTrackingBtn').disabled = true;
+      document.getElementById('stopTrackingBtn').disabled = false;
+    });
+
+    document.getElementById('stopTrackingBtn').addEventListener('click', function() {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        alert("Rastreamento parado.");
+      }
+      document.getElementById('liveTrackingBtn').disabled = false;
+      document.getElementById('stopTrackingBtn').disabled = true;
+    });
   </script>
 </body>
 </html>
