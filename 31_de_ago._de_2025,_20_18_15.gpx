@@ -1,0 +1,25 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:geotracker="http://ilyabogdanovich.com/gpx/extensions/geotracker" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="Gravado no Geo Tracker para iOS de Ilya Bogdanovich">
+  <metadata>
+    <name>31 de ago. de 2025, 20:18:15</name>
+    <author>
+      <name>Gravado no Geo Tracker para iOS de Ilya Bogdanovich</name>
+      <link href="https://apps.apple.com/app/geo-tracker-gps-tracker/id1610586137" />
+    </author>
+    <link href="https://apps.apple.com/app/geo-tracker-gps-tracker/id1610586137" />
+    <time>2025-08-31T23:18:15Z</time>
+  </metadata>
+  <trk>
+    <name>31 de ago. de 2025, 20:18:15</name>
+    <src>Gravado no Geo Tracker para iOS de Ilya Bogdanovich</src>
+    <link href="https://apps.apple.com/app/geo-tracker-gps-tracker/id1610586137" />
+    <extensions>
+      <geotracker:meta>
+        <geotracker:length>0</geotracker:length>
+        <geotracker:duration>0</geotracker:duration>
+        <geotracker:creationtime>2025-08-31T23:18:15Z</geotracker:creationtime>
+        <geotracker:activity>0</geotracker:activity>
+      </geotracker:meta>
+    </extensions>
+  </trk>
+</gpx>

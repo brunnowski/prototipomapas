@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Prototipo Rota</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- Plugin GPX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
+
+  <script>
+    // Inicializa o mapa
+    var map = L.map('map').setView([0,0], 2);
+
+    // Camada base (OpenStreetMap grátis)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // Carregar arquivo GPX (troque pelo seu arquivo!)
+    new L.GPX("rota.gpx", {
+        async: true,
+        marker_options: {
+          startIconUrl: "https://leafletjs.com/examples/custom-icons/leaf-green.png",
+          endIconUrl: "https://leafletjs.com/examples/custom-icons/leaf-red.png",
+          shadowUrl: "https://leafletjs.com/examples/custom-icons/leaf-shadow.png"
+        }
+    }).on('loaded', function(e) {
+        map.fitBounds(e.target.getBounds());
+    }).addTo(map);
+  </script>
+</body>
+</html>
