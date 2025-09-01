@@ -1,110 +1,103 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Rastreamento e GPX com Histórico</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/togeojson@0.16.0"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <style>
-    #map { height: 100vh; }
-    #menu, #controls, #exportScreen, #historyScreen { display: none; }
-    .top-buttons { position: absolute; top: 10px; left: 10px; z-index: 1000; }
-    .top-buttons button { margin: 2px; padding: 5px 10px; }
-    #historyList { max-height: 300px; overflow-y: auto; text-align: left; }
-  </style>
+<meta charset="UTF-8">
+<title>Rastreamento e GPX Minimalista</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/togeojson@0.16.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  body { margin:0; font-family: sans-serif; background:#f7f7f7; }
+  #map { height: 100vh; }
+  #menu, #controls, #exportScreen, #historyScreen { display: none; text-align: center; }
+  button { border:none; padding:12px 20px; margin:10px; border-radius:12px; background:#0078d7; color:white; font-size:16px; cursor:pointer; transition:0.2s; }
+  button:hover { background:#005ea3; }
+  .top-buttons { position:absolute; bottom:20px; right:20px; display:flex; flex-direction:column; gap:15px; z-index:1000; }
+  .round-btn { width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; }
+  #historyList { max-height:300px; overflow-y:auto; text-align:left; margin:10px; }
+  input[type=file] { display:none; }
+</style>
 </head>
 <body>
-  <!-- Tela inicial -->
-  <div id="menu">
-    <h2>Escolha uma opção</h2>
-    <button onclick="startTracking()">Rastreamento em Tempo Real</button>
-    <input type="file" id="gpxFile" accept=".gpx" onchange="loadGPX(event)">
-    <button onclick="showHistory()">Histórico</button>
-  </div>
 
-  <!-- Mapa -->
-  <div id="map"></div>
+<!-- Tela inicial -->
+<div id="menu">
+  <h2>Escolha uma opção</h2>
+  <button onclick="startTracking()">Rastreamento</button>
+  <button onclick="document.getElementById('gpxFile').click()">Upload GPX</button>
+  <button onclick="showHistory()">Histórico</button>
+  <input type="file" id="gpxFile" accept=".gpx" onchange="loadGPX(event)">
+</div>
 
-  <!-- Controles Tracking -->
-  <div id="controls" class="top-buttons">
-    <button onclick="pauseTracking()">Pausar</button>
-    <button onclick="stopTracking()">Stop</button>
-  </div>
+<!-- Mapa -->
+<div id="map"></div>
 
-  <!-- Tela Exportação -->
-  <div id="exportScreen">
-    <h2>Exportar rota</h2>
-    <button onclick="exportAsImage()">Exportar como JPG</button>
-    <button onclick="exportAsGPX()">Exportar como GPX</button>
-    <button onclick="resetApp()">Voltar ao início</button>
-  </div>
+<!-- Controles Tracking -->
+<div id="controls" class="top-buttons">
+  <button class="round-btn" onclick="pauseTracking()">⏸️</button>
+  <button class="round-btn" onclick="stopTracking()">⏹️</button>
+</div>
 
-  <!-- Tela Histórico -->
-  <div id="historyScreen">
-    <h2>Histórico de Rotas</h2>
-    <div id="historyList"></div>
-    <button onclick="backToMenu()">Voltar</button>
-  </div>
+<!-- Tela Exportação -->
+<div id="exportScreen">
+  <h2>Exportar rota</h2>
+  <button onclick="exportAsImage()">Exportar JPG</button>
+  <button onclick="exportAsGPX()">Exportar GPX</button>
+  <button onclick="resetApp()">Voltar</button>
+</div>
+
+<!-- Tela Histórico -->
+<div id="historyScreen">
+  <h2>Histórico de Rotas</h2>
+  <div id="historyList"></div>
+  <button onclick="backToMenu()">Voltar</button>
+</div>
 
 <script>
 let map, routeLayer, userMarker;
-let tracking = false, paused = false;
-let coords = [], watchId, wakeLock;
-let currentRouteName = '';
+let tracking=false, paused=false;
+let coords=[], watchId, wakeLock;
+let currentRouteName='';
 
-window.onload = () => { document.getElementById('menu').style.display = 'block'; };
+window.onload = ()=>{document.getElementById('menu').style.display='block';};
 
-function initMap() {
-  map = L.map('map').setView([0, 0], 2);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-  routeLayer = L.polyline([], {color: 'red'}).addTo(map);
+function initMap(){
+  map=L.map('map').setView([0,0],2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+  routeLayer=L.polyline([],{color:'red'}).addTo(map);
 }
 
-// === Rastreamento ===
-function startTracking() {
-  document.getElementById('menu').style.display = 'none';
-  document.getElementById('controls').style.display = 'block';
-  initMap();
-  tracking = true; paused = false; coords = [];
-  currentRouteName = 'Rota - ' + new Date().toLocaleString();
-
-  if (navigator.geolocation) {
-    watchId = navigator.geolocation.watchPosition(updatePosition, console.error, { enableHighAccuracy:true, maximumAge:0 });
+// Rastreamento
+function startTracking(){
+  document.getElementById('menu').style.display='none';
+  document.getElementById('controls').style.display='flex';
+  initMap(); tracking=true; paused=false; coords=[];
+  currentRouteName='Rota - '+new Date().toLocaleString();
+  if(navigator.geolocation){
+    watchId=navigator.geolocation.watchPosition(updatePosition,console.error,{enableHighAccuracy:true,maximumAge:0});
   }
-  if ('wakeLock' in navigator) navigator.wakeLock.request('screen').then(lock=>wakeLock=lock).catch(console.error);
+  if('wakeLock' in navigator) navigator.wakeLock.request('screen').then(lock=>wakeLock=lock).catch(console.error);
 }
 
-function updatePosition(pos) {
-  if (!tracking || paused) return;
-  const lat = pos.coords.latitude, lng = pos.coords.longitude;
+function updatePosition(pos){
+  if(!tracking||paused)return;
+  const lat=pos.coords.latitude,lng=pos.coords.longitude;
   coords.push([lat,lng]);
   routeLayer.addLatLng([lat,lng]);
   map.setView([lat,lng],16);
-  const heading = pos.coords.heading || 0;
-  if (!userMarker) {
-    const arrowIcon = L.divIcon({ html:'➤', className:'arrow-icon', iconSize:[30,30] });
-    userMarker = L.marker([lat,lng],{icon:arrowIcon, rotationAngle:heading}).addTo(map);
-  } else {
-    userMarker.setLatLng([lat,lng]);
-    userMarker.setRotationAngle(heading);
-  }
+  const heading=pos.coords.heading||0;
+  if(!userMarker){
+    const arrowIcon=L.divIcon({html:'➤',className:'arrow-icon',iconSize:[30,30]});
+    userMarker=L.marker([lat,lng],{icon:arrowIcon,rotationAngle:heading}).addTo(map);
+  }else{userMarker.setLatLng([lat,lng]);userMarker.setRotationAngle(heading);}
 }
 
-function pauseTracking() { paused = !paused; alert(paused ? 'Rastreamento pausado':'Rastreamento retomado'); }
+function pauseTracking(){paused=!paused; alert(paused?'Rastreamento pausado':'Rastreamento retomado');}
+function stopTracking(){tracking=false;if(watchId)navigator.geolocation.clearWatch(watchId);if(wakeLock)wakeLock.release(); saveRouteToHistory(currentRouteName,coords); document.getElementById('controls').style.display='none'; document.getElementById('exportScreen').style.display='block';}
 
-function stopTracking() {
-  tracking=false;
-  if(watchId) navigator.geolocation.clearWatch(watchId);
-  if(wakeLock) wakeLock.release();
-  saveRouteToHistory(currentRouteName, coords);
-  document.getElementById('controls').style.display='none';
-  document.getElementById('exportScreen').style.display='block';
-}
-
-// === GPX Upload ===
-function loadGPX(event) {
+// GPX Upload
+function loadGPX(event){
   document.getElementById('menu').style.display='none';
   initMap();
   const file=event.target.files[0];
@@ -119,66 +112,17 @@ function loadGPX(event) {
   reader.readAsText(file);
 }
 
-// === Exportações ===
-function exportAsImage(){
-  html2canvas(document.getElementById('map')).then(canvas=>{
-    const link=document.createElement('a');
-    link.download='rota.jpg'; link.href=canvas.toDataURL('image/jpeg'); link.click();
-  });
-}
+// Exportações
+function exportAsImage(){html2canvas(document.getElementById('map')).then(canvas=>{const link=document.createElement('a'); link.download='rota.jpg'; link.href=canvas.toDataURL('image/jpeg'); link.click();});}
+function exportAsGPX(){let gpx='<?xml version="1.0"?><gpx version="1.1" creator="WebApp"><trk><name>'+currentRouteName+'</name><trkseg>'; coords.forEach(([lat,lng])=>{gpx+=`<trkpt lat="${lat}" lon="${lng}"></trkpt>`;}); gpx+='</trkseg></trk></gpx>'; const blob=new Blob([gpx],{type:'application/gpx+xml'}); const link=document.createElement('a'); link.href=URL.createObjectURL(blob); link.download='rota.gpx'; link.click();}
 
-function exportAsGPX(){
-  let gpx='<?xml version="1.0"?><gpx version="1.1" creator="WebApp"><trk><name>'+currentRouteName+'</name><trkseg>';
-  coords.forEach(([lat,lng])=>{ gpx+=`<trkpt lat="${lat}" lon="${lng}"></trkpt>`; });
-  gpx+='</trkseg></trk></gpx>';
-  const blob=new Blob([gpx],{type:'application/gpx+xml'});
-  const link=document.createElement('a');
-  link.href=URL.createObjectURL(blob); link.download='rota.gpx'; link.click();
-}
-
-// === Histórico ===
-function saveRouteToHistory(name, points){
-  const history=JSON.parse(localStorage.getItem('routeHistory')||'[]');
-  history.push({name, points});
-  localStorage.setItem('routeHistory', JSON.stringify(history));
-}
-
-function showHistory(){
-  document.getElementById('menu').style.display='none';
-  document.getElementById('historyScreen').style.display='block';
-  const history=JSON.parse(localStorage.getItem('routeHistory')||'[]');
-  const listDiv=document.getElementById('historyList'); listDiv.innerHTML='';
-  history.forEach((r,i)=>{
-    const div=document.createElement('div');
-    div.innerHTML=`${r.name} <button onclick='viewHistory(${i})'>Ver</button> <button onclick='deleteHistory(${i})'>Apagar</button>`;
-    listDiv.appendChild(div);
-  });
-}
-
-function viewHistory(index){
-  document.getElementById('historyScreen').style.display='none';
-  document.getElementById('map').style.display='block';
-  initMap();
-  const history=JSON.parse(localStorage.getItem('routeHistory')||'[]');
-  coords=history[index].points;
-  routeLayer=L.polyline(coords,{color:'green'}).addTo(map);
-  map.fitBounds(routeLayer.getBounds());
-  currentRouteName=history[index].name;
-}
-
-function deleteHistory(index){
-  const history=JSON.parse(localStorage.getItem('routeHistory')||'[]');
-  history.splice(index,1);
-  localStorage.setItem('routeHistory',JSON.stringify(history));
-  showHistory();
-}
-
-function backToMenu(){
-  document.getElementById('historyScreen').style.display='none';
-  document.getElementById('menu').style.display='block';
-}
-
-function resetApp(){ location.reload(); }
+// Histórico
+function saveRouteToHistory(name, points){const history=JSON.parse(localStorage.getItem('routeHistory')||'[]'); history.push({name, points}); localStorage.setItem('routeHistory',JSON.stringify(history));}
+function showHistory(){document.getElementById('menu').style.display='none';document.getElementById('historyScreen').style.display='block';const history=JSON.parse(localStorage.getItem('routeHistory')||'[]');const listDiv=document.getElementById('historyList'); listDiv.innerHTML=''; history.forEach((r,i)=>{const div=document.createElement('div'); div.innerHTML=`${r.name} <button onclick='viewHistory(${i})'>Ver</button> <button onclick='deleteHistory(${i})'>Apagar</button>`; listDiv.appendChild(div);});}
+function viewHistory(index){document.getElementById('historyScreen').style.display='none';document.getElementById('map').style.display='block';initMap(); const history=JSON.parse(localStorage.getItem('routeHistory')||'[]'); coords=history[index].points; routeLayer=L.polyline(coords,{color:'green'}).addTo(map); map.fitBounds(routeLayer.getBounds()); currentRouteName=history[index].name;}
+function deleteHistory(index){const history=JSON.parse(localStorage.getItem('routeHistory')||'[]'); history.splice(index,1); localStorage.setItem('routeHistory',JSON.stringify(history)); showHistory();}
+function backToMenu(){document.getElementById('historyScreen').style.display='none'; document.getElementById('menu').style.display='block';}
+function resetApp(){location.reload();}
 </script>
 </body>
 </html>
