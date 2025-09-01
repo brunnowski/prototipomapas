@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     body { margin: 0; font-family: sans-serif; }
-    #map { height: 90vh; }
+    #map { height: 85vh; }
     #controls {
       padding: 10px;
       background: #f4f4f4;
@@ -27,6 +27,7 @@
     <input type="file" id="fileInput" accept=".gpx" />
     <button id="liveTrackingBtn">Iniciar Rastreamento em Tempo Real</button>
     <button id="stopTrackingBtn" disabled>Parar Rastreamento</button>
+    <button id="exportBtn">Exportar Imagem</button>
   </div>
   <div id="map"></div>
 
@@ -34,6 +35,8 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <!-- Plugin GPX -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
+  <!-- html2canvas para exportar imagem -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
   <script>
     // Inicializa o mapa
@@ -110,6 +113,24 @@
       }
       document.getElementById('liveTrackingBtn').disabled = false;
       document.getElementById('stopTrackingBtn').disabled = true;
+    });
+
+    // =========================
+    // 3) Exportar mapa como imagem
+    // =========================
+    document.getElementById('exportBtn').addEventListener('click', function() {
+      html2canvas(document.getElementById("map"), {
+        useCORS: true
+      }).then(canvas => {
+        // Converte para JPG
+        var imgData = canvas.toDataURL("image/jpeg", 0.9);
+
+        // Cria link para download
+        var link = document.createElement("a");
+        link.href = imgData;
+        link.download = "rota.jpg";
+        link.click();
+      });
     });
   </script>
 </body>
