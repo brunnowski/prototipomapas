@@ -1,137 +1,173 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <title>Protótipo de Rastreamento</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rastreamento & GPX Viewer</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/togeojson@0.16.0/dist/togeojson.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
-    body { margin: 0; font-family: sans-serif; }
-    #map { height: 85vh; }
-    #controls {
-      padding: 10px;
-      background: #f4f4f4;
-      border-bottom: 1px solid #ddd;
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
     }
-    button, input {
-      margin: 5px;
-      padding: 8px 12px;
-      font-size: 14px;
+    #start-screen, #map-screen {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #map {
+      flex: 1;
+      width: 100%;
+    }
+    .controls {
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    button {
+      padding: 10px 15px;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
     }
   </style>
 </head>
 <body>
-  <div id="controls">
-    <input type="file" id="fileInput" accept=".gpx" />
-    <button id="liveTrackingBtn">Iniciar Rastreamento em Tempo Real</button>
-    <button id="stopTrackingBtn" disabled>Parar Rastreamento</button>
-    <button id="exportBtn">Exportar Imagem</button>
+  <!-- Tela inicial -->
+  <div id="start-screen">
+    <h2>Escolha uma opção</h2>
+    <button id="start-tracking">Rastreamento em Tempo Real</button>
+    <br />
+    <input type="file" id="gpx-upload" accept=".gpx" />
   </div>
-  <div id="map"></div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <!-- Plugin GPX -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
-  <!-- html2canvas para exportar imagem -->
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <!-- Tela do mapa -->
+  <div id="map-screen">
+    <div id="map"></div>
+    <div class="controls">
+      <button id="export-img">Exportar Imagem (JPG)</button>
+      <button id="back">Voltar</button>
+    </div>
+  </div>
 
   <script>
-    // Inicializa o mapa
-    var map = L.map('map').setView([0,0], 2);
+    const startScreen = document.getElementById('start-screen');
+    const mapScreen = document.getElementById('map-screen');
+    const startTrackingBtn = document.getElementById('start-tracking');
+    const gpxUpload = document.getElementById('gpx-upload');
+    const exportBtn = document.getElementById('export-img');
+    const backBtn = document.getElementById('back');
 
-    // Camada base (grátis do OpenStreetMap)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+    let map, routeLine, positions = [];
+    let watchId = null;
+    let wakeLock = null;
 
-    // ======================
-    // 1) Carregar arquivo GPX
-    // ======================
-    document.getElementById('fileInput').addEventListener('change', function(e) {
-      var file = e.target.files[0];
-      if (!file) return;
+    // Função para ativar Wake Lock (mantém tela ligada)
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log("Wake Lock ativo");
+        }
+      } catch (err) {
+        console.error("Wake Lock falhou:", err);
+      }
+    }
 
-      var reader = new FileReader();
-      reader.onload = function(evt) {
-        var gpxData = evt.target.result;
+    function initMap() {
+      map = L.map('map').setView([0, 0], 2);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+    }
 
-        var gpxLayer = new L.GPX(gpxData, {
-          async: true,
-          marker_options: {
-            startIconUrl: "https://leafletjs.com/examples/custom-icons/leaf-green.png",
-            endIconUrl: "https://leafletjs.com/examples/custom-icons/leaf-red.png",
-            shadowUrl: "https://leafletjs.com/examples/custom-icons/leaf-shadow.png"
-          }
-        }).on('loaded', function(e) {
-          map.fitBounds(e.target.getBounds());
-        }).addTo(map);
-      };
-      reader.readAsText(file);
-    });
+    function startTracking() {
+      if (!map) initMap();
+      routeLine = L.polyline([], { color: 'red' }).addTo(map);
 
-    // =========================
-    // 2) Rastreamento em tempo real
-    // =========================
-    var watchId = null;
-    var livePath = L.polyline([], {color: 'blue'}).addTo(map);
-    var liveMarker = null;
-
-    document.getElementById('liveTrackingBtn').addEventListener('click', function() {
-      if (navigator.geolocation) {
-        watchId = navigator.geolocation.watchPosition(function(pos) {
-          var lat = pos.coords.latitude;
-          var lon = pos.coords.longitude;
-          var latlng = [lat, lon];
-
-          livePath.addLatLng(latlng);
-
-          if (!liveMarker) {
-            liveMarker = L.marker(latlng).addTo(map).bindPopup("Você está aqui").openPopup();
-            map.setView(latlng, 16);
-          } else {
-            liveMarker.setLatLng(latlng);
-          }
-        }, function(err) {
-          alert("Erro ao acessar GPS: " + err.message);
+      if ('geolocation' in navigator) {
+        requestWakeLock();
+        watchId = navigator.geolocation.watchPosition(pos => {
+          const latlng = [pos.coords.latitude, pos.coords.longitude];
+          positions.push(latlng);
+          routeLine.addLatLng(latlng);
+          map.setView(latlng, 16);
+        }, err => {
+          console.error(err);
         }, { enableHighAccuracy: true });
       } else {
-        alert("Seu navegador não suporta geolocalização.");
+        alert("Geolocalização não suportada");
       }
+    }
 
-      document.getElementById('liveTrackingBtn').disabled = true;
-      document.getElementById('stopTrackingBtn').disabled = false;
-    });
+    function loadGPX(file) {
+      if (!map) initMap();
+      const reader = new FileReader();
+      reader.onload = e => {
+        const parser = new DOMParser();
+        const gpxDoc = parser.parseFromString(e.target.result, 'application/xml');
+        const geojson = toGeoJSON.gpx(gpxDoc);
+        const gpxLayer = L.geoJSON(geojson, { style: { color: 'blue' } }).addTo(map);
+        map.fitBounds(gpxLayer.getBounds());
+      };
+      reader.readAsText(file);
+    }
 
-    document.getElementById('stopTrackingBtn').addEventListener('click', function() {
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-        alert("Rastreamento parado.");
-      }
-      document.getElementById('liveTrackingBtn').disabled = false;
-      document.getElementById('stopTrackingBtn').disabled = true;
-    });
-
-    // =========================
-    // 3) Exportar mapa como imagem
-    // =========================
-    document.getElementById('exportBtn').addEventListener('click', function() {
-      html2canvas(document.getElementById("map"), {
-        useCORS: true
-      }).then(canvas => {
-        // Converte para JPG
-        var imgData = canvas.toDataURL("image/jpeg", 0.9);
-
-        // Cria link para download
-        var link = document.createElement("a");
-        link.href = imgData;
-        link.download = "rota.jpg";
+    function exportMapAsImage() {
+      html2canvas(document.getElementById('map')).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'rota.jpg';
+        link.href = canvas.toDataURL('image/jpeg');
         link.click();
       });
-    });
+    }
+
+    // Eventos
+    startTrackingBtn.onclick = () => {
+      startScreen.style.display = 'none';
+      mapScreen.style.display = 'flex';
+      startTracking();
+    };
+
+    gpxUpload.onchange = e => {
+      const file = e.target.files[0];
+      if (file) {
+        startScreen.style.display = 'none';
+        mapScreen.style.display = 'flex';
+        loadGPX(file);
+      }
+    };
+
+    exportBtn.onclick = exportMapAsImage;
+
+    backBtn.onclick = () => {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      if (map) map.remove();
+      map = null;
+      startScreen.style.display = 'flex';
+      mapScreen.style.display = 'none';
+    };
+
+    // Tela inicial ao abrir
+    startScreen.style.display = 'flex';
   </script>
 </body>
 </html>
